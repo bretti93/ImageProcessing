@@ -87,12 +87,14 @@ dim(x_images)
 dim(x_verification_images)
 ```
 
-To allow for faster computation we use a subset out of our training set, which we create as follows:
+Now we have to split the dataset into training-set and test-set to train our models.
 ```{r create_subsets, message=FALSE, warning=FALSE}
-x_sub <- x_images[1:1000,,]
-y_sub <- y[1:1000]
-x_test_sub <- x_images[1001:1200,,]
-y_test_sub <- y[1001:1200]
+x_mod <- modelling[1:50000,]
+x_test <- modelling[50001:60000,]
+x_sub <- x_images[1:50000,,]
+y_sub <- y[1:50000]
+x_test_sub <- x_images[50001:60000,,]
+y_test_sub <- y[50001:60000]
 ```
 
 And as a last step in this section we will create the fashion categories according to the numbers which indicate the categories:
@@ -176,33 +178,50 @@ As we can see, this does not help us. for example picture 3, 6 and 15 (shirt, co
 
 Next, we can take a look at the intensity of the pictures, so the mean graycolor value for each picture. We exclude the first column, which contains the label, group by the label and add the fashion category vector so we have a better understanding:
 ```{r summarize_intensity, warning=FALSE}
-cbind(modelling %>% mutate(row_mean = rowMeans(modelling[,-1])) %>%
-        group_by(label) %>% summarize(avg_pic_int = mean(row_mean)),fashion_cat)
+arrange(cbind(modelling %>% mutate(row_mean = rowMeans(modelling[,-1])) %>%
+        group_by(label) %>% summarize(avg_pic_int = mean(row_mean)),fashion_cat),
+        desc(avg_pic_int))
 ```
 
 Here is the standard deviation for the intensity by category:
 ```{r summarize_sds, warning=FALSE}
-cbind(modelling %>% mutate(row_sds = rowSds(as.matrix(modelling[,-1]))) %>%
-        group_by(label) %>% summarize(avg_sds = mean(row_sds)),fashion_cat)
+arrange(cbind(modelling %>% mutate(row_sds = rowSds(as.matrix(modelling[,-1]))) %>%
+        group_by(label) %>% summarize(avg_sds = mean(row_sds)),fashion_cat),
+        desc(avg_sds))
 ```
 
 Furthermore we look how many pixels are unequal to zero, and therefore used for the actual image excluding the background:
 ```{r summarize_pixels, warning=FALSE}
-cbind(modelling %>% mutate(pixels = rowSums(modelling[,-1]>0)) %>%
-         group_by(label) %>% summarize(avg_pixels_used = mean(pixels)),fashion_cat)
+arrange(cbind(modelling %>% mutate(pixels = rowSums(modelling[,-1]>0)) %>%
+        group_by(label) %>% summarize(avg_pixels_used = mean(pixels)),fashion_cat),
+        desc(avg_pixels_used))
 ```
 
 
 We can also calculate the average pixel intensity by dividing the sum of the grayscale values divided by the number of pixels unequal to zero:
 ```{r summarize_pixel_intensity, warning=FALSE}
-cbind(modelling %>% mutate(pixel_int = rowSums(modelling[,-1])/
+arrange(cbind(modelling %>% mutate(pixel_int = rowSums(modelling[,-1])/
         rowSums(modelling[,-1]>0)) %>% group_by(label) %>%
-        summarize(avg_pixel_int = mean(pixel_int)),fashion_cat)
+        summarize(avg_pixel_int = mean(pixel_int)),fashion_cat),
+        desc(avg_pixel_int))
+        
 ```
 
 Finally we take a look at the variability by pixel on overall level. Herefore we calculate and plot the standard deviation by pixel and make it even more understandable by visualizing the results. The code looks as follows:
 ```{r sds_by_pixel, warning=FALSE}
 sds_image <- colSds(as.matrix(x))
 qplot(sds_image, bins = "30", color = I("black"))
-image(1:28, 1:28, matrix(sds, 28, 28)[,28:1], asp = 1, main = "Sds by pixel")
+image(1:28, 1:28, matrix(sds_image, 28, 28)[,28:1], asp = 1, main = "Sds by pixel")
 ```
+
+So what can we conclude from the analysis? We can see that we can't set a threshold for the grayscale value to enhance the possibility for recognizing images, because the shapes in some categories are to similar.
+
+What we can see is that we have a significant difference when looking at the color intensity for the images. Coats, pullovers and bags have much more "average grey-intensity" than trousers, sneakers and sandals.
+Ankle boats and coats have a high standard deviations, whereas shirts, sneakers and sandals significantly lower ones.
+
+These metrics do not take the actual "pixels used" into consideration. Pullovers have the highest average non-black pixels, double as much as sandals. The intensity for the non-black pixels could also be an interesting aspect, because they create seperation in another area.
+
+We can use this "parameter based" approach first for build models and compare the results to other methodes which seem to be more suited for the given task like knn.
+
+## 3. Modelling
+As we discussed in the earlier section, we will test different methods on the very basic approach of taking the caluclated metrics for setting up a model.
